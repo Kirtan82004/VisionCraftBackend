@@ -61,7 +61,7 @@ console.log("hii")
         password,
         phoneNo,
         address,
-        image: image || "",
+        image: image?.url || "",
     })
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"
