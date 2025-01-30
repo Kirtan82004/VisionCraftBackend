@@ -1,5 +1,5 @@
-import {Router} from "express"
-import { 
+import { Router } from "express"
+import {
     registerUser,
     loginUser,
     logoutUser,
@@ -20,7 +20,7 @@ import {
     getOrderHistory,
     getOrderDetails,
     cancelOrder
-} from "../controllers/user/orderController.js"   
+} from "../controllers/user/orderController.js"
 import {
     addToCart,
     getCart,
@@ -33,12 +33,14 @@ import {
     deleteProductReview,
     getProductReviews
 } from "../controllers/user/reviewController.js"
-import {upload} from "../middlewares/multer.middleware.js"
+import { createTempFolder } from "../middleware/checkFile.middleware.js"
+import { upload } from "../middlewares/multer.middleware.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router()
 
 router.route("/register").post(
+    createTempFolder,
     upload.fields([
         {
             name: "image",
@@ -48,31 +50,31 @@ router.route("/register").post(
     registerUser
 )
 router.route("/login").post(
-  upload.none(),
+    upload.none(),
     loginUser)
 
-    //secured Routes
-router.route("/logout").post(verifyJWT,logoutUser)
+//secured Routes
+router.route("/logout").post(verifyJWT, logoutUser)
 router.route("/refresh-Token").post(refreshAccessToken)
-router.route("/change-Password").patch(upload.none(),verifyJWT,changeCurrentPassword)
-router.route("/update-Account").patch(upload.none(),verifyJWT,UpdateAccountDetail)
-router.route("/update-Image").patch(upload.single("image"),verifyJWT,updateUserImage)
-router.route("/Current-User").get(verifyJWT,getCurrentUser)
+router.route("/change-Password").patch(upload.none(), verifyJWT, changeCurrentPassword)
+router.route("/update-Account").patch(upload.none(), verifyJWT, UpdateAccountDetail)
+router.route("/update-Image").patch(upload.single("image"), verifyJWT, updateUserImage)
+router.route("/Current-User").get(verifyJWT, getCurrentUser)
 
 //wishlist routes
 router.route("/getUserWishlist").get(verifyJWT, getUserWishlist)
-router.route("/addToWishlist").post(upload.none(),verifyJWT, addToWishlist)
+router.route("/addToWishlist").post(upload.none(), verifyJWT, addToWishlist)
 router.route("/removeFromWishlist").delete(verifyJWT, removeFromWishlist)
 router.route("/clearWishlist").delete(verifyJWT, clearWishlist)
 
 //order routes
-router.route("/placeOrder").post(upload.none(),verifyJWT, placeOrder)
+router.route("/placeOrder").post(upload.none(), verifyJWT, placeOrder)
 router.route("/getOrderHistory").get(verifyJWT, getOrderHistory)
-router.route("/getOrderDetails").get(upload.none(),verifyJWT,getOrderDetails)
+router.route("/getOrderDetails").get(upload.none(), verifyJWT, getOrderDetails)
 router.route("/cancelOrder:orderId").delete(cancelOrder)
 
 //cart routes
-router.route("/addToCart").post(upload.none(),verifyJWT,addToCart)
+router.route("/addToCart").post(upload.none(), verifyJWT, addToCart)
 router.route("/getCart").get(verifyJWT, getCart)
 router.route("/removeFromCart").delete(verifyJWT, removeFromCart)
 router.route("/clearCart").delete(verifyJWT, clearCart)
