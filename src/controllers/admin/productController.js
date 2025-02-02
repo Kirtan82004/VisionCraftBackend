@@ -122,62 +122,10 @@ const deleteProduct = asyncHandler(async (req, res) => {
             .json(new ApiError(500, error.message || "error occured while deleting product"))
     }
 })
-const getAllProducts = asyncHandler(async (req, res) => {
-   try{
-   console.log(req.body)
-       const  { category, minPrice, maxPrice, brand, search } = req.body;
-        console.log(category)
-        const matchQuery = {
-            $and: [
-                category ? { category: category} : {},
-                minPrice ? { price: { $gte: parseFloat(minPrice) } } : {},
-                maxPrice ? { price: { $lte: parseFloat(maxPrice) } } : {},
-                brand ? { brand: new RegExp(brand, "i") } : {},
-                search
-                    ? {
-                        $or: [
-                            { name: new RegExp(search, "i") },
-                            { description: new RegExp(search, "i") }
-                        ]
-                    }
-                    : {}
-            ]
-        };
-        const pipeline = [
-            { $match: matchQuery },
-            {
-                $project: {
-                    name: 1,
-                    category: 1,
-                    price: 1,
-                    brand: 1,
-                    description: 1,
-                    stock: 1,
-                    ratings: 1
-                }
-            }
-        ];
-        const products = await Product.aggregate(pipeline);
-        console.log(products)
-        if(!products){
-            throw new ApiError(404, "No products found")
-        }
-        return res
-            .status(200)
-            .json(new ApiResponse(200, products, "Products retrieved successfully"))
 
-
-    } catch (error) {
-        console.log(error.message)
-        return res
-            .status(500)
-            .json(new ApiError(500, error.message || "error occured while getting all products"))
-
-    }
-})
 export {
     createProduct,
     updateProduct,
     deleteProduct,
-    getAllProducts
+
 }

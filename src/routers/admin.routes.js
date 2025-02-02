@@ -71,10 +71,10 @@ router.route("/product/delete").delete(upload.none(),verifyJWT,deleteProduct)
 router.route("/products").get(upload.none(),verifyJWT,getAllProducts)
 
 //order routes
-router.route("/orders").get(upload.none(),verifyJWT,getAllOrders)
-router.route("/orders/:orderId").get(verifyJWT,getOrderById)
-router.route("/orders/:orderId/status").put(verifyJWT,updateOrderStatus)
-router.route("/orders/:orderId").delete(verifyJWT,deleteOrder)
+router.route("/get-orders").get(upload.none(),verifyJWT,getAllOrders)
+router.route("/get-orders-ById/:orderId").get(verifyJWT,getOrderById)
+router.route("/update-Order-Status/:orderId").put(verifyJWT,updateOrderStatus)
+router.route("/delete-order/:orderId").delete(verifyJWT,deleteOrder)
 
 
 export default router;

@@ -8,7 +8,7 @@ import mongoose from "mongoose";
 
 const getAllOrders = asyncHandler(async (req, res) => {
 try {
-        const { page = 1, limit = 10, status, customerId } = req.body;
+        const { page = 1, limit = 10, status, customerId } = req.query;
         console.log(status)
         console.log(customerId)
         const filter = {};

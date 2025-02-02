@@ -82,7 +82,7 @@ const getOrderHistory = asyncHandler(async (req, res) => {
 
 const getOrderDetails = asyncHandler(async (req, res) => {
   try {
-    const { orderId } = req.body;
+    const { orderId } = req.params;
     console.log(orderId)
     const order = await Order.aggregate([
       {

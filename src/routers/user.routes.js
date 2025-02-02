@@ -33,6 +33,10 @@ import {
     deleteProductReview,
     getProductReviews
 } from "../controllers/user/reviewController.js"
+import {
+    getAllProducts,
+    getProductById
+} from "../controllers/user/productController.js"
 import { createTempFolder } from "../middleware/checkFile.middleware.js"
 import { upload } from "../middlewares/multer.middleware.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -59,7 +63,7 @@ router.route("/refresh-Token").post(refreshAccessToken)
 router.route("/change-Password").patch(upload.none(), verifyJWT, changeCurrentPassword)
 router.route("/update-Account").patch(upload.none(), verifyJWT, UpdateAccountDetail)
 router.route("/update-Image").patch(upload.single("image"), verifyJWT, updateUserImage)
-router.route("/Current-User").get(verifyJWT, getCurrentUser)
+router.route("/current-User").get(verifyJWT, getCurrentUser)
 
 //wishlist routes
 router.route("/getUserWishlist").get(verifyJWT, getUserWishlist)
@@ -70,8 +74,8 @@ router.route("/clearWishlist").delete(verifyJWT, clearWishlist)
 //order routes
 router.route("/placeOrder").post(upload.none(), verifyJWT, placeOrder)
 router.route("/getOrderHistory").get(verifyJWT, getOrderHistory)
-router.route("/getOrderDetails").get(upload.none(), verifyJWT, getOrderDetails)
-router.route("/cancelOrder:orderId").delete(cancelOrder)
+router.route("/getOrderDetails/:orderId").get(upload.none(), verifyJWT, getOrderDetails)
+router.route("/cancelOrder/:orderId").delete(cancelOrder)
 
 //cart routes
 router.route("/addToCart").post(upload.none(), verifyJWT, addToCart)
@@ -80,12 +84,14 @@ router.route("/removeFromCart").delete(verifyJWT, removeFromCart)
 router.route("/clearCart").delete(verifyJWT, clearCart)
 
 //review routes
-router.route("/addProductReview").post(upload.none(), addProductReview)
-router.route("/getProductReviews").get(getProductReviews)
+router.route("/addProductReview/:productId").post(upload.none(), addProductReview)
+router.route("/getProductReviews/:productId").get(getProductReviews)
 router.route("/editProductReview").patch(editProductReview)
 router.route("/deleteProductReview").delete(deleteProductReview)
 
-
+//Product routeS
+router.route("/getAllProducts").get(getAllProducts)
+router.route("/getProductById/:productId").get(getProductById)
 
 
 
