@@ -4,6 +4,7 @@ import { User } from "../../models/user.model.js"
 import { uploadOnCloudinary } from "../../utils/cloudinary.js"
 import { ApiResponse } from "../../utils/ApiResponse.js"
 import jwt from "jsonwebtoken"
+import { io } from "../../app.js"
 
 
 
@@ -23,9 +24,9 @@ const generateAccessAndRefreshToken = async (userId)=>{
 }
 
 const registerUser = asyncHandler(async (req, res) => {
-    console.log(req.body)
-    const { fullName, email, password, phoneNo, address } = req.body;
+    console.log("body data",req.body)
 
+    const { fullName, email, password, phoneNo, address } = req.body;
     if (
         [fullName, email, password, phoneNo, address].some(
             (field) =>!field || field?.trim === "")
@@ -62,9 +63,16 @@ const registerUser = asyncHandler(async (req, res) => {
         address,
         image: image?.url || "",
     })
+
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"
     )
+    io.emit("user", {
+        action: "create",
+        user: createdUser,
+        message: `New user registered with user id ${createdUser._id}`
+    })
+
 
     if (!createdUser) {
         throw new ApiError(500, "Something went wrong while registering the user")
@@ -105,6 +113,7 @@ const loginUser = asyncHandler( async (req,res)=>{
     httpOnly:true,
     secure:true
    }
+   console.log(loggedUser)
    return res
    .status(200)
    .cookie("accessToken",accessToken, options)
@@ -118,6 +127,7 @@ const loginUser = asyncHandler( async (req,res)=>{
 })
 
 const logoutUser = asyncHandler(async(req,res)=>{
+    
     await User.findByIdAndUpdate(
         req.user._id,
        {
@@ -131,7 +141,8 @@ const logoutUser = asyncHandler(async(req,res)=>{
     )
     const options = {
         httpOnly:true,
-        secure:true
+        secure:false,
+        sameSite: "None"
     }
     return res
     .status(200)
@@ -143,7 +154,7 @@ const logoutUser = asyncHandler(async(req,res)=>{
 })
 
 const refreshAccessToken= asyncHandler(async(req,res)=>{
-    console.log(req.cookies)
+    
    try {
    
      const incomingRefreshToken = req.cookies.refreshToken;
@@ -219,6 +230,12 @@ const UpdateAccountDetail = asyncHandler(async(req,res)=>{
         },
         {new:true}
     ).select("-password")
+    await user.save({validateBeforeSave:false});
+    io.emit("user", {
+        action: "update",
+        user: user,
+        message: `User ${user._id} updated successfully`
+    })
     return res
     .status(200)
     .json(new ApiResponse(200,user, "Account details updated successfully"))
@@ -231,13 +248,13 @@ const updateUserImage = asyncHandler(async(req,res)=>{
     }
     const image = await uploadOnCloudinary(localImagePsth)
     console.log("image",image)
-    if(!image.url){
+    if(!image){
         throw new ApiError(400,"Erroe while uploading image")
     }
     const user = await User.findByIdAndUpdate(req.user?._id,
         {
             $set:{
-                image: image.url
+                image: image
             }
         },
         {
@@ -253,7 +270,7 @@ const getCurrentUser = asyncHandler(async(req,res)=>{
     const user = await User.findById(req.user._id).select("-password")
     return res
     .status(200)
-    .json(new ApiResponse(200,user,"Admin data"))
+    .json(new ApiResponse(200,user,"User data"))
 
 })
 

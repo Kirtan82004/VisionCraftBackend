@@ -4,14 +4,17 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../../utils/cloudinary.js"
+import { io } from "../../app.js";
 import mongoose from "mongoose";
 
 
 const createProduct = asyncHandler(async (req, res) => {
     try {
         const { name, price, description, category, brand, stock } = req.body;
-
-        const categoryName = category.trim()
+        if(!category){
+            throw new ApiError(400, "Category is required");
+        }
+        const categoryName = category.trim();
 
         const categoryExists = await Category.findOne({ name: categoryName });
         if (!categoryExists) {
@@ -35,15 +38,15 @@ const createProduct = asyncHandler(async (req, res) => {
             const imageUrl = await uploadOnCloudinary(multipleImages[i]);
             multipleImageUrls.push(imageUrl);
         }
-        console.log(multipleImageUrls)
+        console.log("imagearray",multipleImageUrls)
 
 
-        const allImages = singleImageUrl ? [singleImageUrl, ...multipleImageUrls] : multipleImageUrls;
+        const allImages = singleImageUrl? [singleImageUrl, ...multipleImageUrls] : multipleImageUrls;
 
         if (allImages.length === 0) {
             return res.status(400).json({ message: "At least one image is required" });
         }
-        const product = new Product({
+        const newProduct = new Product({
             name,
             price,
             description,
@@ -53,12 +56,15 @@ const createProduct = asyncHandler(async (req, res) => {
             images: allImages
 
         })
+        console.log("allimages",allImages)
 
-        await product.save();
-
-        return res
-            .status(200)
-            .json(new ApiResponse(200, product, "Product created successfully"))
+        await newProduct.save();
+        io.emit("product", {
+            action: "create",
+            productName:newProduct.name,
+            meaasge:`New product ${newProduct.name} created`
+        });
+        res.json({ message: "Product created successfully" });
     } catch (error) {
         console.log(error.message)
         return res
@@ -93,7 +99,10 @@ const updateProduct = asyncHandler(async (req, res) => {
         }
 
         await updatedProduct.save()
-
+        io.emit("product", {
+            action: "update",
+            product: updatedProduct,
+        });
         return res
             .status(200)
             .json(new ApiResponse(200, updatedProduct, "Product updated successfully"))
@@ -113,6 +122,12 @@ const deleteProduct = asyncHandler(async (req, res) => {
         if (!product) {
             throw new ApiError(404, "Product not found");
         }
+        io.emit("product", {
+            action: "delete",
+            productId:product._id,
+            productName:product.name,
+            message: `Product ${product._id} has been deleted`,
+        })  
         return res
             .status(200)
             .json(new ApiResponse(200, product, "Product deleted successfully"))

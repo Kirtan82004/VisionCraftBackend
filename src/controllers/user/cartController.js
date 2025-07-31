@@ -1,17 +1,15 @@
 import { asyncHandler } from "../../utils/asyncHandler.js"
 import { ApiError } from "../../utils/ApiError.js"
-import { User } from "../../models/user.model.js"
 import { ApiResponse } from "../../utils/ApiResponse.js"
 import { Product } from "../../models/product.model.js"
-import { Order } from "../../models/order.model.js"
 import { Cart } from "../../models/cart.model.js"
-import mongoose from "mongoose"
+
 
 
 const addToCart = asyncHandler(async (req, res) => {
     try {
         const userId = req.user._id;
-        const { productId, quantity } = req.body;
+        const { productId, quantity=1 } = req.body;
 
         const product = await Product.findById(productId);
         if (!product) {

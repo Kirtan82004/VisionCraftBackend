@@ -4,6 +4,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import {Order} from "../../models/order.model.js"
+import { io } from "../../app.js";
 import mongoose from "mongoose";
 
 const getAllOrders = asyncHandler(async (req, res) => {
@@ -63,17 +64,19 @@ const updateOrderStatus =asyncHandler( async (req, res) => {
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: "Invalid order status." });
         }
-        const order = await Order.findByIdAndUpdate(
-            id,
-            { orderStatus: status },
-            { new: true }
-        );
+       const order = await Order.findById(id)
+       order.orderStatus = status
 
-        if (!order) {
-            return res.status(404).json({ message: "Order not found." });
-        }
+       if (!order) {
+        return res.status(404).json({ message: "Order not found." });
+    }
 
-        res.status(200).json({ message: "Order status updated successfully.", order });
+        await order.save();
+        io.emit("orderStatusChanged", {                   
+            orderId: order._id,
+            status: order.orderStatus,
+            meaasge:`Oredr ${order._id} status cahanged to ${status}`
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -86,9 +89,11 @@ const deleteOrder = asyncHandler(async(req,res)=>{
         if(!order){
             throw new ApiError(404,"Order not found")
         }
-        return res
-        .status(200)
-        .json(new ApiResponse(200,order,"Order deleted successfully"))
+        await order.save();
+        io.emit("orderDeleted", {
+            orderId: order._id,
+            message: `Order ${order._id} has been deleted.`,
+        })
     } catch (error) {
         throw new ApiError(500,error.message)
         

@@ -22,7 +22,6 @@ import {
     createProduct,
     updateProduct,
     deleteProduct,
-    getAllProducts
 } from "../controllers/admin/productController.js"
 import {
     getAllOrders,
@@ -30,6 +29,9 @@ import {
     updateOrderStatus,
     deleteOrder
 } from "../controllers/admin/orderControllers.js"
+import {
+    createCategory
+} from "../controllers/categoryControllers.js"
 import { upload } from "../middlewares/multer.middleware.js"
 import { verifyJWT } from "../middlewares/adminAuth.middleware.js"
 
@@ -68,13 +70,15 @@ router.route("/create-product").post(upload.fields([
 ]),verifyJWT,createProduct)
 router.route("/product/update").put(upload.none(),verifyJWT,updateProduct)
 router.route("/product/delete").delete(upload.none(),verifyJWT,deleteProduct)
-router.route("/products").get(upload.none(),verifyJWT,getAllProducts)
 
 //order routes
 router.route("/get-orders").get(upload.none(),verifyJWT,getAllOrders)
 router.route("/get-orders-ById/:orderId").get(verifyJWT,getOrderById)
 router.route("/update-Order-Status/:orderId").put(verifyJWT,updateOrderStatus)
 router.route("/delete-order/:orderId").delete(verifyJWT,deleteOrder)
+
+//category route
+router.route("/create-category").post(upload.none(),verifyJWT,createCategory)
 
 
 export default router;

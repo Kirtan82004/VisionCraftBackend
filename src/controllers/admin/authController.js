@@ -102,6 +102,8 @@ const loginAdmin = asyncHandler(async(req,res)=>{
 
 const logoutAdmin = asyncHandler(async(req,res)=>{
     console.log(req.admin._id)
+    const refreshToken = req.cookies.refreshToken
+    console.log(req.cookies)
     await Admin.findByIdAndUpdate(
         req.admin._id,
         {

@@ -6,8 +6,10 @@ import { Admin } from "../models/admin.model.js";
 
 export const verifyJWT = asyncHandler(async(req,res,next)=>{
     try {
+        console.log("admin",req.cookies)
         const token = req.cookies?.accessToken||req.header
         ('Authorization')?.replace("Bearer ","");
+        console.log(token)
         
         if(!token) {
             throw new ApiError(401,"Unathorized request")

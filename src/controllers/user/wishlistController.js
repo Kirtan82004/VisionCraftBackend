@@ -6,8 +6,8 @@ import { Product } from "../../models/product.model.js"
 
 const getUserWishlist = asyncHandler(async (req, res) => {
     try {
-        const userId = req.userId; 
-    
+        const userId = user._id; 
+         //console.log("hii",userId)
         const user = await User.findById(userId).populate("wishlist", "name price images");
         if (!user) {
           return res.status(404).json({ message: "User not found" });
@@ -22,10 +22,11 @@ const getUserWishlist = asyncHandler(async (req, res) => {
 
 const addToWishlist = asyncHandler(async (req, res) => {
     try {
-        const userId = req.user._id;
-        const { productId } = req.body;
-        console.log(productId)
-    
+      //console.log("body",req.body)
+        const userId = user._id;
+        //console.log("user",userId)
+        const productId  = req.body._id;
+         //console.log("product",productId)
         const product = await Product.findById(productId);
         if (!product) {
           return res.status(404).json({ message: "Product not found" });
@@ -55,8 +56,10 @@ const addToWishlist = asyncHandler(async (req, res) => {
 })
 const removeFromWishlist = asyncHandler(async (req, res) => {
     try {
-        const userId = req.userId;
-        const { productId } = req.body;
+        const userId = req.user._id;
+        //console.log("body",req.body)
+        const productId  = req.body.product._id;
+        //console.log("productid",productId)
     
         const user = await User.findById(userId);
         if (!user) {

@@ -16,6 +16,7 @@ import {
     clearWishlist
 } from "../controllers/user/wishlistController.js"
 import {
+    createRazorpayOrder,
     placeOrder,
     getOrderHistory,
     getOrderDetails,
@@ -33,11 +34,7 @@ import {
     deleteProductReview,
     getProductReviews
 } from "../controllers/user/reviewController.js"
-import {
-    getAllProducts,
-    getProductById
-} from "../controllers/user/productController.js"
-import { createTempFolder } from "../middleware/checkFile.middleware.js"
+import { createTempFolder } from "../middlewares/checkFile.middleware.js"
 import { upload } from "../middlewares/multer.middleware.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -67,18 +64,19 @@ router.route("/current-User").get(verifyJWT, getCurrentUser)
 
 //wishlist routes
 router.route("/getUserWishlist").get(verifyJWT, getUserWishlist)
-router.route("/addToWishlist").post(upload.none(), verifyJWT, addToWishlist)
-router.route("/removeFromWishlist").delete(verifyJWT, removeFromWishlist)
-router.route("/clearWishlist").delete(verifyJWT, clearWishlist)
+router.route("/addToWishlist").post(verifyJWT, addToWishlist)
+router.route("/removeFromWishlist").delete(verifyJWT,removeFromWishlist)
+router.route("/clearWishlist").delete(clearWishlist)
 
 //order routes
-router.route("/placeOrder").post(upload.none(), verifyJWT, placeOrder)
+router.route("/create-razorpay-order").post(verifyJWT,createRazorpayOrder)
+router.route("/placeOrder").post(verifyJWT, placeOrder)
 router.route("/getOrderHistory").get(verifyJWT, getOrderHistory)
-router.route("/getOrderDetails/:orderId").get(upload.none(), verifyJWT, getOrderDetails)
+router.route("/getOrderDetails/:orderId").get(verifyJWT, getOrderDetails)
 router.route("/cancelOrder/:orderId").delete(cancelOrder)
 
 //cart routes
-router.route("/addToCart").post(upload.none(), verifyJWT, addToCart)
+router.route("/addToCart").post( verifyJWT, addToCart)
 router.route("/getCart").get(verifyJWT, getCart)
 router.route("/removeFromCart").delete(verifyJWT, removeFromCart)
 router.route("/clearCart").delete(verifyJWT, clearCart)
@@ -89,9 +87,6 @@ router.route("/getProductReviews/:productId").get(getProductReviews)
 router.route("/editProductReview").patch(editProductReview)
 router.route("/deleteProductReview").delete(deleteProductReview)
 
-//Product routeS
-router.route("/getAllProducts").get(getAllProducts)
-router.route("/getProductById/:productId").get(getProductById)
 
 
 
