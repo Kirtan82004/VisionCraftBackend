@@ -46,7 +46,7 @@ const orderSchema = new Schema({
     paymentStatus:{
         type:String,
         required:true,
-        enum: ['pending', 'success', 'failed'],
+        enum: ['Pending', 'Success', 'Failed'],
         default:'pending'
     },
     orderStatus:{
@@ -56,7 +56,7 @@ const orderSchema = new Schema({
     }
 
 },{
-    timeStamps:true
+    timestamps:true
 })
 
 

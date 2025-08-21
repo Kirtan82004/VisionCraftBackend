@@ -1,6 +1,7 @@
 import mongoose ,{Schema} from "mongoose";
 
 
+
 const productSchema = new Schema({
     name: {
         type: String,
@@ -43,7 +44,7 @@ const productSchema = new Schema({
           user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, 
           comment: { type: String },
           rating: { type: Number, min: 1, max: 5 },
-        },
+        }
       ],
 
 

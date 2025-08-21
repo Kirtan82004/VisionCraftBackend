@@ -9,9 +9,13 @@ import { Cart } from "../../models/cart.model.js"
 const addToCart = asyncHandler(async (req, res) => {
     try {
         const userId = req.user._id;
-        const { productId, quantity=1 } = req.body;
+        const { _id, quantity } = req.body;
+        console.log("productId quantity",req.body)
+        console.log("productId",_id)
+        console.log("quantity",quantity)
 
-        const product = await Product.findById(productId);
+        const product = await Product.findById(_id);
+
         if (!product) {
             return res.status(404).json({ message: "Product not found" });
         }
@@ -22,12 +26,12 @@ const addToCart = asyncHandler(async (req, res) => {
 
             cart = new Cart({
                 customer: userId,
-                products: [{ product: productId, quantity, price: product.price }]
+                products: [{ product: _id, quantity, price: product.price }]
             });
         } else {
 
             const productIndex = cart.products.findIndex(
-                (item) => item.product.toString() === productId
+                (item) => item.product.toString() === _id
             );
 
             if (productIndex > -1) {
@@ -35,7 +39,7 @@ const addToCart = asyncHandler(async (req, res) => {
                 cart.products[productIndex].quantity += quantity;
             } else {
 
-                cart.products.push({ product: productId, quantity, price: product.price });
+                cart.products.push({ product: _id, quantity, price: product.price });
             }
         }
 

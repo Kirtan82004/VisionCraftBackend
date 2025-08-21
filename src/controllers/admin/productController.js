@@ -5,7 +5,6 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { uploadOnCloudinary } from "../../utils/cloudinary.js"
 import { io } from "../../app.js";
-import mongoose from "mongoose";
 
 
 const createProduct = asyncHandler(async (req, res) => {

@@ -6,8 +6,8 @@ import { Product } from "../../models/product.model.js"
 
 const getUserWishlist = asyncHandler(async (req, res) => {
     try {
-        const userId = user._id; 
-         //console.log("hii",userId)
+        const userId = req.user._id; 
+         console.log("hii",userId)
         const user = await User.findById(userId).populate("wishlist", "name price images");
         if (!user) {
           return res.status(404).json({ message: "User not found" });
@@ -23,9 +23,9 @@ const getUserWishlist = asyncHandler(async (req, res) => {
 const addToWishlist = asyncHandler(async (req, res) => {
     try {
       //console.log("body",req.body)
-        const userId = user._id;
+        const userId = req.user._id;
         //console.log("user",userId)
-        const productId  = req.body._id;
+        const productId  = req.body.product;
          //console.log("product",productId)
         const product = await Product.findById(productId);
         if (!product) {

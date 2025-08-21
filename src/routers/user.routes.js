@@ -82,10 +82,10 @@ router.route("/removeFromCart").delete(verifyJWT, removeFromCart)
 router.route("/clearCart").delete(verifyJWT, clearCart)
 
 //review routes
-router.route("/addProductReview/:productId").post(upload.none(), addProductReview)
-router.route("/getProductReviews/:productId").get(getProductReviews)
-router.route("/editProductReview").patch(editProductReview)
-router.route("/deleteProductReview").delete(deleteProductReview)
+router.route("/addProductReview/:productId").post(verifyJWT, addProductReview)
+router.route("/getProductReviews/:productId").get(verifyJWT,getProductReviews)
+router.route("/editProductReview").patch(verifyJWT,editProductReview)
+router.route("/deleteProductReview").delete(verifyJWT,deleteProductReview)
 
 
 

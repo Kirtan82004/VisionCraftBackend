@@ -1,5 +1,6 @@
 import { asyncHandler } from "../utils/asyncHandler.js"
 import { ApiError } from "../utils/ApiError.js"
+import { Review } from "../models/review.model.js"
 import { Product } from "../models/product.model.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
 import { Category } from "../models/category.model.js"
@@ -74,24 +75,50 @@ const getAllProducts = asyncHandler(async (req, res) => {
             .json(new ApiError(500, error.message || "Error occurred while getting all products"));
     }
 });
+const getProductDetails = asyncHandler(async (req, res) => {
+  try {
+    const { productId } = req.params;
 
+    // Get product and populate category
+    const product = await Product.findById(productId)
+    //  .populate("category", "name")
+      .lean();
 
- const getProductDetails = asyncHandler(async (req, res) => {
-try {
-        const id = req.params.productId;
-        const product = await Product.findById(id);
-        if(!product){
-            throw new ApiError(404,'Product not found')
-        }
-        return res
-            .status(200)
-            .json(new ApiResponse(200, product, "Product retrieved successfully"))
-} catch (error) {
+    if (!product) {
+      throw new ApiError(404, "Product not found");
+    }
+
+    // Fetch reviews for this product and populate user
+    const reviews = await Review.find({ product: productId })
+      .populate("user", "fullName email")
+      .sort({ createdAt: -1 }) // newest first
+      .lean();
+
+    // Calculate average rating and total reviews
+    const totalReviews = reviews.length;
+    const avgRating =
+      totalReviews > 0
+        ? reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews
+        : 0;
+
+    // Attach additional computed fields
+    product.reviews = reviews;
+    product.totalReviews = totalReviews;
+    product.averageRating = parseFloat(avgRating.toFixed(1));
+    product.inStock = product.stock > 0;
+
     return res
-        .status(500)
-        .json(new ApiError(500, error.message || "error occured while getting product"))
-}
- })
+      .status(200)
+      .json(new ApiResponse(200, product, "Product retrieved successfully"));
+  } catch (error) {
+    console.error(error.message);
+    return res
+      .status(500)
+      .json(new ApiError(500, error.message || "Error occurred while getting product"));
+  }
+});
+
+
 
  export {
     getAllProducts,

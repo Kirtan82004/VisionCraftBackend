@@ -10,23 +10,47 @@ const addProductReview = asyncHandler(async (req, res) => {
     const { productId } = req.params;
     const { rating, comment } = req.body;
 
+    console.log("Rating:", rating);
+    console.log("Comment:", comment);
+    console.log("Product ID:", productId);
+
     if (!productId || !rating) {
-      return res.status(400).json({ success: false, message: "Product ID and rating are required." });
+      return res.status(400).json({
+        success: false,
+        message: "Product ID and rating are required.",
+      });
     }
 
+    // Find the product and populate its reviews with user details
+    const product = await Product.findById(productId).populate({
+      path: "reviews",
+      populate: {
+        path: "user",
+        select: "fullName email",
+      },
+    });
 
-    const product = await Product.findById(productId);
     if (!product) {
-      return res.status(404).json({ success: false, message: "Product not found." });
+      return res.status(404).json({
+        success: false,
+        message: "Product not found.",
+      });
     }
 
+    // Check if user has already reviewed the product
+    const existingReview = await Review.findOne({
+      product: productId,
+      user: req.user._id,
+    });
 
-    const existingReview = await Review.findOne({ product: productId, user: req.user._id });
     if (existingReview) {
-      return res.status(400).json({ success: false, message: "You have already reviewed this product." });
+      return res.status(400).json({
+        success: false,
+        message: "You have already reviewed this product.",
+      });
     }
 
-
+    // Create a new review
     const newReview = await Review.create({
       product: productId,
       user: req.user._id,
@@ -34,19 +58,45 @@ const addProductReview = asyncHandler(async (req, res) => {
       comment,
     });
 
+    // Populate the user details in the newly created review
+    await newReview.populate("user", "fullName email");
+    console.log("newReview",newReview)
 
-    product.reviews.push(newReview._id);
-    product.ratings =
-      product.reviews.length > 1
-        ? (product.ratings * (product.reviews.length - 1) + rating) / product.reviews.length
-        : rating;
-    await product.save();
+    // Add the review to the product's reviews array
+    product.reviews.push(newReview);
 
-    res.status(201).json({ success: true, review: newReview });
+    // Recalculate product average rating
+    const totalRating =
+      product.ratings * (product.reviews.length - 1) + rating;
+    product.ratings = totalRating / product.reviews.length;
+
+    await product.save({ validateBeforeSave: false });
+console.log("product",product)
+    // Send response
+    res.status(201).json({
+      success: true,
+      review: {
+        _id: newReview._id,
+        rating: newReview.rating,
+        comment: newReview.comment,
+        user: {
+          _id: newReview.user._id,
+          fullName: newReview.user.fullName,
+          email: newReview.user.email,
+        },
+        createdAt: newReview.createdAt,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Error while adding review:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error.",
+      error: error.message,
+    });
   }
-})
+});
+
 const editProductReview = asyncHandler(async (req, res) => {
   try {
     const { reviewId } = req.params;
