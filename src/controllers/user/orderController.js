@@ -114,6 +114,8 @@ const placeOrder = asyncHandler(async (req, res) => {
 // 3️⃣ Get Order History
 const getOrderHistory = asyncHandler(async (req, res) => {
   const userId = req.user._id
+  console.log("userId",userId)
+  if (!userId) throw new ApiError(401, "Unauthorized: User not found")
 
   const orders = await Order.aggregate([
     { $match: { customer: new mongoose.Types.ObjectId(userId) } },
