@@ -71,7 +71,7 @@ router.route("/clearWishlist").delete(clearWishlist)
 //order routes
 router.route("/create-razorpay-order").post(verifyJWT,createRazorpayOrder)
 router.route("/placeOrder").post(verifyJWT, placeOrder)
-router.route("/getOrderHistory").get(verifyJWT, getOrderHistory)
+router.route("/getOrderHistory").get( verifyJWT,getOrderHistory)
 router.route("/getOrderDetails/:orderId").get(verifyJWT, getOrderDetails)
 router.route("/cancelOrder/:orderId").delete(cancelOrder)
 
