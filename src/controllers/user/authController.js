@@ -103,7 +103,61 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
   return res.status(200).json(new ApiResponse(200, { accessToken, refreshToken }, "Access token refreshed successfully"));
 });
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body
+    const user = await User.findById(req.user._id)
+    if (!user) throw new ApiError(404, "User not found")
 
+    const isValidPassword = await user.isPasswordCorrect(oldPassword)
+    if (!isValidPassword) throw new ApiError(401, "Invalid old password")
+
+    user.password = newPassword
+    await user.save({ validateBeforeSave: false })
+
+    return res.status(200).json(new ApiResponse(200, {}, "Password changed successfully"))
+})
+
+const UpdateAccountDetail = asyncHandler(async (req, res) => {
+    const { fullName, email, address, phoneNo } = req.body
+    if (!(fullName || email || address || phoneNo)) {
+        throw new ApiError(400, "All fields are required")
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id,
+        { $set: { fullName, email, address, phoneNo } },
+        { new: true }
+    ).select("-password")
+
+    await user.save({ validateBeforeSave: false })
+
+    io.emit("user", {
+        action: "update",
+        user: user,
+        message: `User ${user._id} updated successfully`
+    })
+
+    return res.status(200).json(new ApiResponse(200, user, "Account details updated successfully"))
+})
+
+const updateUserImage = asyncHandler(async (req, res) => {
+    const localImagePath = req.file?.path
+    if (!localImagePath) throw new ApiError(400, "Please upload an image")
+
+    const image = await uploadOnCloudinary(localImagePath)
+    if (!image) throw new ApiError(400, "Error while uploading image")
+
+    const user = await User.findByIdAndUpdate(req.user?._id,
+        { $set: { image: image } },
+        { new: true }
+    ).select("-password")
+
+    return res.status(200).json(new ApiResponse(200, user, "User image updated successfully"))
+})
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id).select("-password")
+    return res.status(200).json(new ApiResponse(200, user, "User data"))
+})
 // ✅ Other controllers (change password, update account, update image, get current user) remain same
 // Just make sure auth middleware uses:
 // const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
