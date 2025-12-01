@@ -113,30 +113,37 @@ const placeOrder = asyncHandler(async (req, res) => {
 
 // 3️⃣ Get Order History
 const getOrderHistory = asyncHandler(async (req, res) => {
-  const userId = req.user._id
+ try {
+   const userId = req.user._id
+   console.log("userId",userId)
+ 
+   const orders = await Order.aggregate([
+     { $match: { customer: new mongoose.Types.ObjectId(userId) } },
+     {
+       $project: {
+         _id: 1,
+         createdAt: 1,
+         orderStatus: 1,
+         orderTotal: {
+           $sum: {
+             $map: {
+               input: "$products",
+               as: "product",
+               in: { $multiply: ["$$product.price", "$$product.quantity"] },
+             },
+           },
+         },
+       },
+     },
+     { $sort: { createdAt: -1 } },
+   ])
+ 
+   res.status(200).json({ message: "Order history retrieved successfully", orders })
+ } catch (error) {
 
-  const orders = await Order.aggregate([
-    { $match: { customer: new mongoose.Types.ObjectId(userId) } },
-    {
-      $project: {
-        _id: 1,
-        createdAt: 1,
-        orderStatus: 1,
-        orderTotal: {
-          $sum: {
-            $map: {
-              input: "$products",
-              as: "product",
-              in: { $multiply: ["$$product.price", "$$product.quantity"] },
-            },
-          },
-        },
-      },
-    },
-    { $sort: { createdAt: -1 } },
-  ])
-
-  res.status(200).json({ message: "Order history retrieved successfully", orders })
+    console.error(error)
+    res.status(500).json({ message: "Failed to retrieve order history" })
+ }
 })
 
 // 4️⃣ Get Order Details
@@ -265,3 +272,4 @@ export {
   getOrderDetails,
   cancelOrder,
 }
+
