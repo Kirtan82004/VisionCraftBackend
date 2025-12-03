@@ -176,7 +176,7 @@ const logoutUser = asyncHandler(async (req, res) => {
 })
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-
+    console.log("starting refresh token")
     try {
         console.log("reqheaders",req.headers)
         const incomingRefreshToken = req.headers.refreshToken;
@@ -311,3 +311,4 @@ export {
 
 
 }
+
