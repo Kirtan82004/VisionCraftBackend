@@ -177,12 +177,8 @@ const logoutUser = asyncHandler(async (req, res) => {
 const refreshAccessToken = asyncHandler(async (req, res) => {
     console.log("starting refresh token");
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            throw new ApiError(401, "Unauthorized request: no refresh token provided");
-        }
 
-        const incomingRefreshToken = authHeader.split(" ")[1]; // extract token after 'Bearer'
+        const incomingRefreshToken = req.get("Authorization")?.replace("Bearer ", ""); // extract token after 'Bearer'
         
         const decodedToken = jwt.verify(
             incomingRefreshToken,
@@ -313,5 +309,6 @@ export {
 
 
 }
+
 
 
