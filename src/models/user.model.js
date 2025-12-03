@@ -62,11 +62,6 @@ const userSchema = new Schema({
     timeStamps:true
 })
 
-userSchema.index(
-    {email:1},
-    {_id:1}
-),
-
 
 userSchema.pre("save",async function(next){
     if(!this.isModified("password")) return next();
@@ -106,5 +101,6 @@ userSchema.methods.generateRefreshToken= function(){
     )
 
 }
+
 
 export const  User = mongoose.model("User",userSchema) 
