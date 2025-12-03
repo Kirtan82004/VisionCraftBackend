@@ -178,8 +178,8 @@ const logoutUser = asyncHandler(async (req, res) => {
 const refreshAccessToken = asyncHandler(async (req, res) => {
 
     try {
-
-        const incomingRefreshToken = req.cookies.refreshToken;
+        console.log("reqheaders",req.headers)
+        const incomingRefreshToken = req.headers.refreshToken;
         if (!incomingRefreshToken) {
             throw new ApiError(401, "unauthorizes request")
         }
@@ -307,6 +307,7 @@ export {
     UpdateAccountDetail,
     updateUserImage,
     getCurrentUser
+
 
 
 }
