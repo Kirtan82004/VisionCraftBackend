@@ -14,7 +14,7 @@ function createApp() {
   app.use(compression());
 
   app.use(cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+    origin: process.env.CORS_ORIGIN || "https://vision-craft-opal.vercel.app",
     credentials: true,
   }));
   app.use(express.json({ limit: "10mb" }));
@@ -29,5 +29,6 @@ function createApp() {
 
   return app;
 }
+
 
 export { createApp };
