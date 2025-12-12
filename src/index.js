@@ -18,7 +18,7 @@ connectDB()
 
     const io = new Server(server, {
       cors: {
-        origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+        origin: process.env.CORS_ORIGIN || "https://vision-craft-opal.vercel.app",
         methods: ["GET", "POST"],
         credentials: true,
       },
@@ -43,5 +43,6 @@ connectDB()
     console.error("❌ MongoDB connection failed:", err);
     process.exit(1);
   });
+
 
 export { ioInstance };
