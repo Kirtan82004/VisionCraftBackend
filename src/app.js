@@ -15,6 +15,8 @@ function createApp() {
 
   app.use(cors({
     origin: process.env.CORS_ORIGIN || "https://vision-craft-opal.vercel.app",
+    methods: ["GET", "POST", "OPTIONS"],   // allow polling + websocket upgrade
+    allowedHeaders: ["Content-Type", "Authorization"], 
     credentials: true,
   }));
   app.use(express.json({ limit: "10mb" }));
@@ -32,3 +34,4 @@ function createApp() {
 
 
 export { createApp };
+
