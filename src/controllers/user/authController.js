@@ -195,12 +195,14 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     try {
 
         const incomingRefreshToken = req.cookies.refreshToken || req.get("Authorization")?.replace("Bearer ", "");
+        console.log("incomingRefreshToken",incomingRefreshToken)
         if (!incomingRefreshToken) {
             throw new ApiError(401, "unauthorizes request")
         }
         const decodedToken = jwt.verify(
             incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET
         )
+        
         const user = await User.findById(decodedToken?._id)
         if (!user) {
             throw new ApiError(401, "Invalid refresh token")
@@ -333,3 +335,4 @@ export {
 
 
 }
+
