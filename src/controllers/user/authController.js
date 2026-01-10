@@ -194,7 +194,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
     try {
 
-        const incomingRefreshToken = req.cookies.refreshToken;
+        const incomingRefreshToken = req.cookies.refreshToken || req.get("Authorization")?.replace("Bearer ", "");
         if (!incomingRefreshToken) {
             throw new ApiError(401, "unauthorizes request")
         }
@@ -329,6 +329,7 @@ export {
     UpdateAccountDetail,
     updateUserImage,
     getCurrentUser
+
 
 
 }
