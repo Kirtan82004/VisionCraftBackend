@@ -25,6 +25,7 @@ import {
 import {
     createCategory
 } from "../controllers/categoryControllers.js"
+import {getAllUsers,updateUser,deleteUser,getUserById} from "../controllers/admin/customerController.js"
 import { upload } from "../middlewares/multer.middleware.js"
 import { verifyJWT } from "../middlewares/auth.middleware.js"
 import { authorizeRoles } from "../middlewares/authorizeRole.middleware.js"
@@ -65,6 +66,13 @@ router.route("/order/delete-order/:orderId").delete(verifyJWT,authorizeRoles("ad
 
 //category route
 router.route("/create-category").post(verifyJWT,authorizeRoles("admin"),createCategory)
+
+//Users route
+router.route("/users").get(verifyJWT,authorizeRoles("admin"),getAllUsers)
+router.route("/users/:id").post(verifyJWT,authorizeRoles("admin"),updateUser)
+router.route("/users/:id").delete(verifyJWT,authorizeRoles("admin"),deleteUser)
+router.route("/users/:id").get(verifyJWT,authorizeRoles("admin"),getUserById)
+
 
 
 export default router;
