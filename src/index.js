@@ -18,7 +18,7 @@ connectDB()
 
     const io = new Server(server, {
       cors: {
-        origin: process.env.CORS_ORIGIN || "https://vision-craft-opal.vercel.app",
+        origin: process.env.CORS_ORIGIN || "https://vision-craft-eight.vercel.app",
         methods: ["GET", "POST"],
         credentials: true,
       },
@@ -46,3 +46,4 @@ connectDB()
 
 
 export { ioInstance };
+
