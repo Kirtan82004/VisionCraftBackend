@@ -14,7 +14,7 @@ function createApp() {
   app.use(compression());
 
   app.use(cors({
-    origin: process.env.CORS_ORIGIN || "https://vision-craft-eight.vercel.app",
+    origin: process.env.CORS_ORIGIN || "https://vision-craft-opal.vercel.app",
     allowedHeaders: ["Content-Type", "Authorization"], 
     credentials: true,
   }));
@@ -33,6 +33,7 @@ function createApp() {
 
 
 export { createApp };
+
 
 
 
