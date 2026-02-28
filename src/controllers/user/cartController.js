@@ -1,129 +1,124 @@
-import { asyncHandler } from "../../utils/asyncHandler.js"
-import { ApiError } from "../../utils/ApiError.js"
-import { ApiResponse } from "../../utils/ApiResponse.js"
-import { Product } from "../../models/product.model.js"
-import { Cart } from "../../models/cart.model.js"
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
+import { Product } from "../../models/product.model.js";
+import { Cart } from "../../models/cart.model.js";
+import { getIO } from "../../config/socket.js";
 
-
-
+/* =========================
+   ADD TO CART
+========================= */
 const addToCart = asyncHandler(async (req, res) => {
-    try {
-        const userId = req.user._id;
-        const { _id, quantity } = req.body;
-        console.log("productId quantity",req.body)
-        console.log("productId",_id)
-        console.log("quantity",quantity)
+  const userId = req.user._id;
+  const { productId, quantity = 1 } = req.body;
 
-        const product = await Product.findById(_id);
+  if (!productId || quantity <= 0) {
+    throw new ApiError(400, "Invalid product or quantity");
+  }
 
-        if (!product) {
-            return res.status(404).json({ message: "Product not found" });
-        }
+  const product = await Product.findById(productId);
+  if (!product) throw new ApiError(404, "Product not found");
 
-        let cart = await Cart.findOne({ customer: userId });
+  if (product.stock < quantity) {
+    throw new ApiError(400, "Not enough stock available");
+  }
 
-        if (!cart) {
+  let cart = await Cart.findOne({ customer: userId });
 
-            cart = new Cart({
-                customer: userId,
-                products: [{ product: _id, quantity, price: product.price }]
-            });
-        } else {
+  if (!cart) {
+    cart = await Cart.create({
+      customer: userId,
+      products: [
+        {
+          product: productId,
+          quantity,
+          price: product.price,
+        },
+      ],
+    });
+  } else {
+    const item = cart.products.find(
+      (p) => p.product.toString() === productId
+    );
 
-            const productIndex = cart.products.findIndex(
-                (item) => item.product.toString() === _id
-            );
-
-            if (productIndex > -1) {
-
-                cart.products[productIndex].quantity += quantity;
-            } else {
-
-                cart.products.push({ product: _id, quantity, price: product.price });
-            }
-        }
-
-        await cart.save();
-        return res
-            .status(200)
-            .json(new ApiResponse(200, cart, "Product added to cart"))
-
-    } catch (error) {
-        console.error(error);
-        return res
-            .status(500)
-            .json(new ApiError(500, "Failed to add product to cart"))
+    if (item) {
+      item.quantity += quantity;
+      item.price = product.price;
+    } else {
+      cart.products.push({
+        product: productId,
+        quantity,
+        price: product.price,
+      });
     }
-})
 
+    await cart.save();
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, cart, "Product added to cart")
+  );
+});
+
+
+/* =========================
+   GET CART
+========================= */
 const getCart = asyncHandler(async (req, res) => {
-    try {
-        const userId = req.userId;
+  const userId = req.user._id;
 
-        const cart = await Cart.findOne({ customer: userId })
-            .populate('products.product', 'name price stock');
+  const cart = await Cart.findOne({ customer: userId }).populate(
+    "products.product",
+    "name price stock images"
+  );
 
-        if (!cart) {
-            return res.status(200).json({ message: "Cart is empty", cart: { products: [] } });
-        }
-        return res
-            .status(200)
-            .json(new ApiResponse(200, cart, "Cart retrieved successfully"))
+  return res.status(200).json(
+    new ApiResponse(200, cart || { products: [] }, "Cart fetched")
+  );
+});
 
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Failed to retrieve cart" });
-    }
-})
-
+/* =========================
+   REMOVE FROM CART
+========================= */
 const removeFromCart = asyncHandler(async (req, res) => {
-    try {
-        const userId = req.userId;
-        const { productId } = req.body;
+  const userId = req.user._id;
+  const { productId } = req.body;
 
-        const cart = await Cart.findOneAndUpdate(
-            { customer: userId },
-            { $pull: { products: { product: productId } } },
-            { new: true }
-        );
+  if (!productId) throw new ApiError(400, "Product ID required");
 
-        if (!cart) {
-            return res.status(404).json({ message: "Cart not found" });
-        }
-        return res
-            .status(200)
-            .json(new ApiResponse(200, cart, "Product removed from cart"))
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Failed to remove product from cart" });
-    }
-})
+  const cart = await Cart.findOneAndUpdate(
+    { customer: userId },
+    { $pull: { products: { product: productId } } },
+    { new: true }
+  );
 
+  if (!cart) throw new ApiError(404, "Cart not found");
+
+  getIO().to(`user-${userId}`).emit("cartUpdated", cart);
+
+  return res.status(200).json(
+    new ApiResponse(200, cart, "Product removed from cart")
+  );
+});
+
+/* =========================
+   CLEAR CART
+========================= */
 const clearCart = asyncHandler(async (req, res) => {
-    try {
-        const userId = req.userId;
+  const userId = req.user._id;
 
-        const cart = await Cart.findOneAndDelete({ customer: userId });
+  await Cart.findOneAndDelete({ customer: userId });
 
-        if (!cart) {
-            return res.status(404).json({ message: "Cart not found" });
-        }
-        return res
-            .status(200)
-            .json(new ApiResponse(200, cart, "Cart cleared successfully"))
-    } catch (error) {
-        console.error(error);
-        return res
-            .status(500)
-            .json("Failed to clear cart")
+  getIO().to(`user-${userId}`).emit("cartCleared");
 
-    }
-}
-)
+  return res.status(200).json(
+    new ApiResponse(200, {}, "Cart cleared successfully")
+  );
+});
+
 export {
-    addToCart,
-    getCart,
-    removeFromCart,
-    clearCart
-}
+  addToCart,
+  getCart,
+  removeFromCart,
+  clearCart,
+};

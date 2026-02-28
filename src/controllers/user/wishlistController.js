@@ -1,107 +1,117 @@
-import { asyncHandler } from "../../utils/asyncHandler.js"
-import { ApiError } from "../../utils/ApiError.js"
-import { User } from "../../models/user.model.js"
-import { ApiResponse } from "../../utils/ApiResponse.js"
-import { Product } from "../../models/product.model.js"
+import mongoose from "mongoose";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
+import { User } from "../../models/user.model.js";
+import { Product } from "../../models/product.model.js";
+import { getIO } from "../../config/socket.js";
 
-const getUserWishlist = asyncHandler(async (req, res) => {
-    try {
-        const userId = req.user._id; 
-         console.log("hii",userId)
-        const user = await User.findById(userId).populate("wishlist", "name price images");
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-    
-        res.status(200).json({ message: "Wishlist retrieved successfully", wishlist: user.wishlist });
-      } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Failed to retrieve wishlist" });
-      }
-})
-
+/* =========================
+   ADD TO WISHLIST
+========================= */
 const addToWishlist = asyncHandler(async (req, res) => {
-    try {
-      //console.log("body",req.body)
-        const userId = req.user._id;
-        //console.log("user",userId)
-        const productId  = req.body.product;
-         //console.log("product",productId)
-        const product = await Product.findById(productId);
-        if (!product) {
-          return res.status(404).json({ message: "Product not found" });
-        }
-    
-      
-        const user = await User.findById(userId);
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-    
-        if (user.wishlist.includes(productId)) {
-          return res.status(400).json({ message: "Product already in wishlist" });
-        }
-    
-        user.wishlist.push(productId);
-        await user.save();
-    
-        return res
-        .status(201)
-        .json(new ApiResponse(200,{wishlist:user.wishlist},"Product added to wishlist"))
-      } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Failed to add product to wishlist" });
-      }
+  const userId = req.user._id;
+  const { productId } = req.body;
 
-})
+  if (!mongoose.Types.ObjectId.isValid(productId)) {
+    throw new ApiError(400, "Invalid product ID");
+  }
+
+  const productExists = await Product.exists({ _id: productId });
+  if (!productExists) {
+    throw new ApiError(404, "Product not found");
+  }
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { $addToSet: { wishlist: productId } }, // prevents duplicates
+    { new: true }
+  ).select("wishlist");
+
+  if (!user) throw new ApiError(404, "User not found");
+
+  getIO().to(`user-${userId}`).emit("wishlistUpdated", {
+    wishlist: user.wishlist,
+  });
+
+  return res.status(200).json(
+    new ApiResponse(200, user.wishlist, "Product added to wishlist")
+  );
+});
+
+/* =========================
+   REMOVE FROM WISHLIST
+========================= */
 const removeFromWishlist = asyncHandler(async (req, res) => {
-    try {
-        const userId = req.user._id;
-        //console.log("body",req.body)
-        const productId  = req.body.product._id;
-        //console.log("productid",productId)
-    
-        const user = await User.findById(userId);
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-    
-        if (!user.wishlist.includes(productId)) {
-          return res.status(400).json({ message: "Product not found in wishlist" });
-        }
-    
-        user.wishlist = user.wishlist.filter((id) => id.toString() !== productId);
-        await user.save();
-    
-        res.status(200).json({ message: "Product removed from wishlist", wishlist: user.wishlist });
-      } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Failed to remove product from wishlist" });
-      }
-})
-const clearWishlist = asyncHandler(async(req,res)=>{
-    try {
-        const userId = req.user?._id
-        const user = await User.findById(userId)
-        if (!user) {
-            throw new ApiError(404, "   user  not found")
-        }
-        user.wishlist = []
-        await user.save()
-        return res
-        .status(200)
-        .json(new ApiResponse(200, user.wishlist, "Wishlist cleared successfully"))
-    } catch (error) {
-        return res
-        .status(500)
-        .json(new ApiError(500, "error occured while clearing wishlist"))
-    
-        
-    }
-})
+  const userId = req.user._id;
+  const { productId } = req.body;
+  console.log("Removing product from wishlist:",req.body);
+
+  if (!mongoose.Types.ObjectId.isValid(productId)) {
+    throw new ApiError(400, "Invalid product ID");
+  }
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { $pull: { wishlist: productId } },
+    { new: true }
+  ).select("wishlist");
+
+  if (!user) throw new ApiError(404, "User not found");
+
+  getIO().to(`user-${userId}`).emit("wishlistUpdated", {
+    wishlist: user.wishlist,
+  });
+
+  return res.status(200).json(
+    new ApiResponse(200, user.wishlist, "Product removed from wishlist")
+  );
+});
+
+/* =========================
+   CLEAR WISHLIST
+========================= */
+const clearWishlist = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { $set: { wishlist: [] } },
+    { new: true }
+  ).select("wishlist");
+
+  if (!user) throw new ApiError(404, "User not found");
+
+  getIO().to(`user-${userId}`).emit("wishlistCleared");
+
+  return res.status(200).json(
+    new ApiResponse(200, [], "Wishlist cleared successfully")
+  );
+});
+
+/* =========================
+   GET USER WISHLIST
+========================= */
+const getUserWishlist = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const user = await User.findById(userId)
+    .populate({
+      path: "wishlist",
+      select: "name price images ratings",
+    })
+    .select("wishlist");
+
+  if (!user) throw new ApiError(404, "User not found");
+
+  return res.status(200).json(
+    new ApiResponse(200, user.wishlist, "Wishlist retrieved successfully")
+  );
+});
+
 export {
-    getUserWishlist,
-    addToWishlist,
-    removeFromWishlist,
-    clearWishlist
-}
+  addToWishlist,
+  removeFromWishlist,
+  clearWishlist,
+  getUserWishlist,
+};

@@ -1,14 +1,16 @@
 import { Router } from "express"
 import {
     getAllCategories,
-    getCategoryByName
+    getCategoryById,
+    createCategory
 } from "../controllers/categoryControllers.js"
 
 
 const router = Router()
 
-router.route("/all-category").get(getAllCategories)
-router.route("/category-by-name").get(getCategoryByName)
+router.route("/").get(getAllCategories)
+router.route("/:Id").get(getCategoryById)
+router.route("/create").post(createCategory)
 
 
 

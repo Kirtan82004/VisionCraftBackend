@@ -1,62 +1,75 @@
-import {asyncHandler} from '../utils/asyncHandler.js';
-import {ApiResponse} from "../utils/ApiResponse.js"
-import {ApiError} from "../utils/ApiError.js"
-import {Category} from '../models/category.model.js';
+import mongoose from "mongoose";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { ApiError } from "../utils/ApiError.js";
+import { Category } from "../models/category.model.js";
+import { getIO } from "../config/socket.js";
 
+/* =========================
+   GET CATEGORY BY ID
+========================= */
+const getCategoryById = asyncHandler(async (req, res) => {
+  const { categoryId } = req.params;
 
+  if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+    throw new ApiError(400, "Invalid category ID");
+  }
 
-const getCategoryByName = asyncHandler(async (req, res) => {
-    try {
-        const { name } = req.query;
-        if (!name) {
-            return res.status(400).json(new ApiError(400, "Category name is required"));
-        }
+  const category = await Category.findById(categoryId);
 
-        const category = await Category.findOne({ name });
-        if (!category) {
-            return res.status(404).json(new ApiError(404, [], "Category not found"));
-        }
+  if (!category) {
+    throw new ApiError(404, "Category not found");
+  }
 
-        return res.status(200).json(new ApiResponse(200, category, "Category found"));
-    } catch (error) {
-        return res.status(500).json(new ApiError(500, [], "Error fetching category"));
-    }
+  return res.status(200).json(
+    new ApiResponse(200, category, "Category fetched successfully")
+  );
 });
 
+/* =========================
+   GET ALL CATEGORIES
+========================= */
+const getAllCategories = asyncHandler(async (_req, res) => {
+  const categories = await Category.find({}).sort({ createdAt: -1 });
 
-const getAllCategories = asyncHandler(async (req, res) => {
-    try {
-        const categories = await Category.find({});
-        return res.status(200).json(new ApiResponse(200, categories, "All categories fetched"));
-    } catch (error) {
-        return res.status(500).json(new ApiError(500, [], "Error fetching categories"));
-    }
+  return res.status(200).json(
+    new ApiResponse(200, categories, "All categories fetched successfully")
+  );
 });
 
-// ✅ 3. Create a New Category
+/* =========================
+   CREATE CATEGORY
+========================= */
 const createCategory = asyncHandler(async (req, res) => {
-    try {
-        console.log(req.body)
-        const { name, description } = req.body;
-        if (!name) {
-            return res.status(400).json(new ApiError(400, [], "Category name is required"));
-        }
+  const { name, description } = req.body;
 
-        // Check if category already exists
-        const existingCategory = await Category.findOne({ name });
-        if (existingCategory) {
-            return res.status(400).json(new ApiError(400, [], "Category already exists"));
-        }
+  if (!name?.trim()) {
+    throw new ApiError(400, "Category name is required");
+  }
 
-        const newcategory = new Category({ name,description });
-        await newcategory.save();
+  const existingCategory = await Category.findOne({
+    name: name.trim().toLowerCase(),
+  });
 
+  if (existingCategory) {
+    throw new ApiError(409, "Category already exists");
+  }
 
-        return res.status(201).json(new ApiResponse(201, newcategory, "Category created successfully"));
-    } catch (error) {
-        console.log(error.message)
-        return res.status(500).json(new ApiError(500, "Error creating category"));
-    }
+  const category = await Category.create({
+    name: name.trim().toLowerCase(),
+    description,
+  });
+
+  // 🔥 Emit socket event (admin dashboards etc.)
+  getIO().emit("categoryCreated", category);
+
+  return res.status(201).json(
+    new ApiResponse(201, category, "Category created successfully")
+  );
 });
 
-export { getCategoryByName, getAllCategories, createCategory };
+export {
+  getCategoryById,
+  getAllCategories,
+  createCategory,
+};

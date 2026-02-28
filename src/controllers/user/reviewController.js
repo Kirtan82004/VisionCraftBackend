@@ -1,189 +1,204 @@
-import { asyncHandler } from "../../utils/asyncHandler.js"
-import { Review } from "../../models/review.model.js"
-import { Product } from "../../models/product.model.js"
+import mongoose from "mongoose";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
+import { Review } from "../../models/review.model.js";
+import { Product } from "../../models/product.model.js";
+import { getIO } from "../../config/socket.js";
 
+/* =========================
+   ADD REVIEW
+========================= */
 const addProductReview = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { rating, comment } = req.body;
+  const userId = req.user._id;
+
+  if (!mongoose.Types.ObjectId.isValid(productId)) {
+    throw new ApiError(400, "Invalid product ID");
+  }
+
+  if (!rating || rating < 1 || rating > 5) {
+    throw new ApiError(400, "Rating must be between 1 and 5");
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { productId } = req.params;
-    const { rating, comment } = req.body;
+    const product = await Product.findById(productId).session(session);
+    if (!product) throw new ApiError(404, "Product not found");
 
-    console.log("Rating:", rating);
-    console.log("Comment:", comment);
-    console.log("Product ID:", productId);
+    const alreadyReviewed = await Review.findOne({
+      product: productId,
+      user: userId,
+    }).session(session);
 
-    if (!productId || !rating) {
-      return res.status(400).json({
-        success: false,
-        message: "Product ID and rating are required.",
-      });
+    if (alreadyReviewed) {
+      throw new ApiError(400, "You already reviewed this product");
     }
 
-    // Find the product and populate its reviews with user details
-    const product = await Product.findById(productId).populate({
-      path: "reviews",
-      populate: {
-        path: "user",
-        select: "fullName email",
-      },
+    const review = await Review.create(
+      [{ product: productId, user: userId, rating, comment }],
+      { session }
+    );
+
+    product.reviews.push(review[0]._id);
+
+    const totalRating =
+      product.ratings * product.reviews.length + rating;
+
+    product.reviewsCount = product.reviews.length;
+    product.ratings = totalRating / product.reviewsCount;
+
+    await product.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    await review[0].populate("user", "fullName email");
+
+    getIO().to(`product-${productId}`).emit("reviewAdded", {
+      productId,
+      review: review[0],
     });
 
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found.",
-      });
+    return res.status(201).json(
+      new ApiResponse(201, review[0], "Review added successfully")
+    );
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+});
+
+/* =========================
+   EDIT REVIEW
+========================= */
+const editProductReview = asyncHandler(async (req, res) => {
+  const { reviewId } = req.params;
+  const { rating, comment } = req.body;
+  const userId = req.user._id;
+
+  if (!rating || rating < 1 || rating > 5) {
+    throw new ApiError(400, "Rating must be between 1 and 5");
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const review = await Review.findById(reviewId).session(session);
+    if (!review) throw new ApiError(404, "Review not found");
+
+    if (review.user.toString() !== userId.toString()) {
+      throw new ApiError(403, "Unauthorized");
     }
 
-    // Check if user has already reviewed the product
-    const existingReview = await Review.findOne({
-      product: productId,
-      user: req.user._id,
-    });
+    const product = await Product.findById(review.product).session(session);
 
-    if (existingReview) {
-      return res.status(400).json({
-        success: false,
-        message: "You have already reviewed this product.",
-      });
-    }
+    const oldRating = review.rating;
 
-    // Create a new review
-    const newReview = await Review.create({
-      product: productId,
-      user: req.user._id,
+    review.rating = rating;
+    review.comment = comment || review.comment;
+    await review.save({ session });
+
+    product.ratings =
+      (product.ratings * product.reviewsCount - oldRating + rating) /
+      product.reviewsCount;
+
+    await product.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    getIO().to(`product-${product._id}`).emit("reviewUpdated", {
+      reviewId,
       rating,
       comment,
     });
 
-    // Populate the user details in the newly created review
-    await newReview.populate("user", "fullName email");
-    console.log("newReview",newReview)
-
-    // Add the review to the product's reviews array
-    product.reviews.push(newReview);
-
-    // Recalculate product average rating
-    const totalRating =
-      product.ratings * (product.reviews.length - 1) + rating;
-    product.ratings = totalRating / product.reviews.length;
-
-    await product.save({ validateBeforeSave: false });
-console.log("product",product)
-    // Send response
-    res.status(201).json({
-      success: true,
-      review: {
-        _id: newReview._id,
-        rating: newReview.rating,
-        comment: newReview.comment,
-        user: {
-          _id: newReview.user._id,
-          fullName: newReview.user.fullName,
-          email: newReview.user.email,
-        },
-        createdAt: newReview.createdAt,
-      },
-    });
+    return res.status(200).json(
+      new ApiResponse(200, review, "Review updated")
+    );
   } catch (error) {
-    console.error("Error while adding review:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error.",
-      error: error.message,
-    });
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
   }
 });
 
-const editProductReview = asyncHandler(async (req, res) => {
-  try {
-    const { reviewId } = req.params;
-    const { rating, comment } = req.body;
-
-    if (!reviewId || !rating) {
-      return res.status(400).json({ success: false, message: "Review ID and rating are required." });
-    }
-
-    const review = await Review.findById(reviewId).populate("product");
-    if (!review) {
-      return res.status(404).json({ success: false, message: "Review not found." });
-    }
-
-    if (review.user.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, message: "Unauthorized to edit this review." });
-    }
-
-    const oldRating = review.rating;
-    review.rating = rating;
-    review.comment = comment || review.comment;
-
-    await review.save();
-
-
-    const product = review.product;
-    product.ratings =
-      (product.ratings * product.reviews.length - oldRating + rating) / product.reviews.length;
-    await product.save();
-
-    res.status(200).json({ success: true, message: "Review updated successfully.", review });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-})
+/* =========================
+   DELETE REVIEW
+========================= */
 const deleteProductReview = asyncHandler(async (req, res) => {
+  const { reviewId } = req.params;
+  const userId = req.user._id;
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { reviewId } = req.params;
+    const review = await Review.findById(reviewId).session(session);
+    if (!review) throw new ApiError(404, "Review not found");
 
-    const review = await Review.findById(reviewId).populate("product");
-    if (!review) {
-      return res.status(404).json({ success: false, message: "Review not found." });
+    if (review.user.toString() !== userId.toString()) {
+      throw new ApiError(403, "Unauthorized");
     }
 
-    if (review.user.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, message: "Unauthorized to delete this review." });
-    }
+    const product = await Product.findById(review.product).session(session);
 
-    const product = review.product;
+    product.reviews.pull(reviewId);
+    product.reviewsCount -= 1;
 
-    // Remove the review from the product
-    product.reviews = product.reviews.filter((revId) => revId.toString() !== reviewId);
-    if (product.reviews.length > 0) {
-      product.ratings =
-        (product.ratings * (product.reviews.length + 1) - review.rating) / product.reviews.length;
+    if (product.reviewsCount === 0) {
+      product.ratings = 0;
     } else {
-      product.ratings = 0; // No reviews left, reset ratings
+      product.ratings =
+        (product.ratings * (product.reviewsCount + 1) - review.rating) /
+        product.reviewsCount;
     }
-    await product.save();
 
-    // Delete the review
-    await review.remove();
+    await product.save({ session });
+    await review.deleteOne({ session });
 
-    res.status(200).json({ success: true, message: "Review deleted successfully." });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-})
-const getProductReviews = asyncHandler(async (req, res) => {
-  try {
-    const { productId } = req.params;
+    await session.commitTransaction();
+    session.endSession();
 
-    const product = await Product.findById(productId).populate({
-      path: "reviews",
-      populate: { path: "user", select: "fullName email" },
+    getIO().to(`product-${product._id}`).emit("reviewDeleted", {
+      reviewId,
+      productId: product._id,
     });
 
-    if (!product) {
-      return res.status(404).json({ success: false, message: "Product not found." });
-    }
-
-    res.status(200).json({ success: true, reviews: product.reviews });
+    return res.status(200).json(
+      new ApiResponse(200, null, "Review deleted")
+    );
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
   }
-})
+});
+
+/* =========================
+   GET REVIEWS
+========================= */
+const getProductReviews = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+
+  const reviews = await Review.find({ product: productId })
+    .populate("user", "fullName email")
+    .sort({ createdAt: -1 });
+
+  return res.status(200).json(
+    new ApiResponse(200, reviews, "Reviews fetched")
+  );
+});
+
 export {
   addProductReview,
   editProductReview,
   deleteProductReview,
-  getProductReviews
-
-}
+  getProductReviews,
+};

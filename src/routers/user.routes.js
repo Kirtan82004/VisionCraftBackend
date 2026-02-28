@@ -4,7 +4,7 @@ import {
     loginUser,
     logoutUser,
     refreshAccessToken,
-    changeCurrentPassword,
+    changePassword,
     UpdateAccountDetail,
     updateUserImage,
     getCurrentUser
@@ -57,7 +57,7 @@ router.route("/login").post(
 //secured Routes
 router.route("/logout").post(verifyJWT, logoutUser)
 router.route("/refresh-Token").post(refreshAccessToken)
-router.route("/change-Password").patch(upload.none(), verifyJWT, changeCurrentPassword)
+router.route("/change-Password").patch(upload.none(), verifyJWT,changePassword)
 router.route("/update-Account").patch(upload.none(), verifyJWT, UpdateAccountDetail)
 router.route("/update-Image").patch(upload.single("image"), verifyJWT, updateUserImage)
 router.route("/current-User").get(verifyJWT,getCurrentUser)

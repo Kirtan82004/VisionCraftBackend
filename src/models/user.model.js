@@ -31,13 +31,6 @@ const userSchema = new Schema({
     image:{
         type:String,
     },
- 
-    oredrHistory:[
-        {
-            type:Schema.Types.ObjectId,
-            ref:"Order"
-        }
-    ],
     wishlist:[
         {
             type:Schema.Types.ObjectId,
@@ -62,11 +55,6 @@ const userSchema = new Schema({
     timeStamps:true
 })
 
-userSchema.index(
-    {email:1},
-    {_id:1}
-),
-
 
 userSchema.pre("save",async function(next){
     if(!this.isModified("password")) return next();
@@ -83,8 +71,6 @@ userSchema.methods.generateAccessToken= function(){
    return jwt.sign(
         {
             _id:this._id,
-            email:this.email,
-            fullName:this.fullName,
             
         },
         process.env.ACCESS_TOKEN_SECRET,

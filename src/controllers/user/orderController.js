@@ -1,262 +1,255 @@
-import { asyncHandler } from "../../utils/asyncHandler.js"
-import { ApiError } from "../../utils/ApiError.js"
-import { ApiResponse } from "../../utils/ApiResponse.js"
-import { Order } from "../../models/order.model.js"
-import { Cart } from "../../models/cart.model.js"
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
+import { Order } from "../../models/order.model.js";
+import { Cart } from "../../models/cart.model.js";
+import Razorpay from "razorpay";
+import mongoose from "mongoose";
+import { getIO } from "../../config/socket.js";
 
-import Razorpay from "razorpay"
-import mongoose from "mongoose"
-
-// 🔐 Razorpay instance
+/* =========================
+   Razorpay Instance
+========================= */
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_SECRET,
-})
+});
 
-// 1️⃣ Create Razorpay Order (called before frontend checkout)
+/* =========================
+   CREATE RAZORPAY ORDER
+========================= */
 const createRazorpayOrder = asyncHandler(async (req, res) => {
-  const { amount } = req.body
-  console.log("amount",amount)
+  const userId = req.user._id;
 
-  if (!amount) throw new ApiError(400, "Amount is required")
+  const cart = await Cart.findOne({ customer: userId });
 
-  const options = {
-    amount: amount * 100, // in paise
+  if (!cart || cart.products.length === 0) {
+    throw new ApiError(400, "Cart is empty");
+  }
+
+  const amount = cart.products.reduce(
+    (sum, item) => sum + item.quantity * item.price,
+    0
+  );
+
+  const order = await razorpay.orders.create({
+    amount: amount * 100, // paise
     currency: "INR",
     receipt: `receipt_${Date.now()}`,
     payment_capture: 1,
-  }
-
-  try {
-    const order = await razorpay.orders.create(options)
-    console.log("order",order)
-    return res.status(200).json(new ApiResponse(200, order, "Razorpay order created"))
-  } catch (error) {
-    console.error("Razorpay Error:", error)
-    throw new ApiError(500, "Failed to create Razorpay order")
-  }
-})
-
-// 2️⃣ Place Order After Successful Payment
-const placeOrder = asyncHandler(async (req, res) => {
-  console.log("req.body", req.body);
-
-  const { shippingDetails, paymentMethod, razorpayPayment } = req.body;
-  const userId = req.user?._id;
-
-  if (!userId) {
-    return res.status(401).json({ message: "Unauthorized: User not found." });
-  }
-
-  const cart = await Cart.findOne({ customer: userId }).populate("products.product", "name price");
-
-  if (!cart || !cart.products || cart.products.length === 0) {
-    return res.status(400).json({ message: "Cart is empty. Cannot place order." });
-  }
-
-  // Prepare product details for order
-  const products = cart.products.map((item) => ({
-    product: item.product._id,
-    quantity: item.quantity,
-    price: item.product.price,
-  }));
-
-  const orderTotal = products.reduce((sum, item) => sum + item.quantity * item.price, 0);
-
-  // Validate shippingDetails
-  if (
-    !shippingDetails ||
-    !shippingDetails.fullName ||
-    !shippingDetails.email ||
-    !shippingDetails.address
-  ) {
-    return res.status(400).json({ message: "Invalid shipping details." });
-  }
-
-  const newOrder = new Order({
-    customer: userId,
-    products,
-    shippingDetails: {
-      fullName: shippingDetails.fullName,
-      email: shippingDetails.email,
-      address: shippingDetails.address,
-    },
-    paymentMethod: paymentMethod || "cod", // default fallback
-    paymentStatus: "Success",
-    orderStatus: "Pending",
-    razorpayOrderId: razorpayPayment?.razorpay_order_id || null,
   });
 
-  const savedOrder = await newOrder.save();
-
-  // Notify via socket (if io is globally available)
-  if (typeof io !== "undefined") {
-    io.emit("order", {
-      action: "create",
-      order: savedOrder,
-      message: `New order placed with order id ${savedOrder._id}`,
-    });
-  }
-
-  // Clear user's cart after successful order
-  await Cart.findOneAndDelete({ customer: userId });
-
-  res.status(201).json({
-    message: "Order placed successfully",
-    order: {
-      ...savedOrder.toObject(),
-      orderTotal,
-    },
-  });
+  return res.status(200).json(
+    new ApiResponse(200, order, "Razorpay order created")
+  );
 });
 
 
-// 3️⃣ Get Order History
-const getOrderHistory = asyncHandler(async (req, res) => {
-  const userId = req.user._id
+/* =========================
+   PLACE ORDER
+========================= */
 
-  const orders = await Order.aggregate([
-    { $match: { customer: new mongoose.Types.ObjectId(userId) } },
-    {
-      $project: {
-        _id: 1,
-        createdAt: 1,
-        orderStatus: 1,
-        orderTotal: {
-          $sum: {
-            $map: {
-              input: "$products",
-              as: "product",
-              in: { $multiply: ["$$product.price", "$$product.quantity"] },
-            },
-          },
+const placeOrder = asyncHandler(async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const userId = req.user._id;
+    const {
+      shippingDetails,
+      paymentMethod = "cod",
+      razorpayPayment,
+    } = req.body;
+
+    if (
+      !shippingDetails?.fullName ||
+      !shippingDetails?.email ||
+      !shippingDetails?.address
+    ) {
+      throw new ApiError(400, "Invalid shipping details");
+    }
+
+    /* 1️⃣ Fetch cart */
+    const cart = await Cart.findOne({ customer: userId })
+      .populate("products.product", "price stock")
+      .session(session);
+
+    if (!cart || cart.products.length === 0) {
+      throw new ApiError(400, "Cart is empty");
+    }
+
+    /* 2️⃣ Verify Razorpay payment (ONLY for online) */
+    if (paymentMethod === "razorpay") {
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+        razorpayPayment || {};
+
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        throw new ApiError(400, "Invalid Razorpay payment data");
+      }
+
+      const generatedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_SECRET)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest("hex");
+
+      if (generatedSignature !== razorpay_signature) {
+        throw new ApiError(400, "Payment verification failed");
+      }
+    }
+
+    /* 3️⃣ Prepare products safely */
+    const products = cart.products.map((item) => {
+      if (item.product.stock < item.quantity) {
+        throw new ApiError(
+          400,
+          `Insufficient stock for product ${item.product._id}`
+        );
+      }
+
+      return {
+        product: item.product._id,
+        quantity: item.quantity,
+        price: item.product.price,
+      };
+    });
+
+    const orderTotal = products.reduce(
+      (sum, item) => sum + item.quantity * item.price,
+      0
+    );
+
+    /* 4️⃣ Create order */
+    const [order] = await Order.create(
+      [
+        {
+          customer: userId,
+          products,
+          shippingDetails,
+          paymentMethod,
+          paymentStatus: paymentMethod === "cod" ? "Pending" : "Success",
+          orderStatus: "Pending",
+          razorpayOrderId:
+            paymentMethod === "razorpay"
+              ? razorpayPayment.razorpay_order_id
+              : null,
         },
-      },
-    },
-    { $sort: { createdAt: -1 } },
-  ])
+      ],
+      { session }
+    );
 
-  res.status(200).json({ message: "Order history retrieved successfully", orders })
-})
+    /* 5️⃣ Clear cart AFTER order creation */
+    await Cart.findOneAndDelete({ customer: userId }).session(session);
 
-// 4️⃣ Get Order Details
-const getOrderDetails = asyncHandler(async (req, res) => {
-  const { orderId } = req.params;
+    await session.commitTransaction();
+    session.endSession();
 
-  const orderDetails = await Order.aggregate([
-    { $match: { _id: new mongoose.Types.ObjectId(orderId) } },
+    /* 🔥 ADMIN SOCKET */
+    getIO().to("admin-room").emit("orderPlaced", {
+      orderId: order._id,
+      total: orderTotal,
+      customer: userId,
+      message: "New order placed",
+    });
 
-    // Join product details
-    {
-      $lookup: {
-        from: "products",
-        localField: "products.product",
-        foreignField: "_id",
-        as: "productDetails",
-      },
-    },
-
-    // Join customer details (optional)
-    {
-      $lookup: {
-        from: "users",
-        localField: "customer",
-        foreignField: "_id",
-        as: "customerDetails",
-      },
-    },
-
-    {
-      $unwind: {
-        path: "$customerDetails",
-        preserveNullAndEmptyArrays: true,
-      },
-    },
-
-    {
-      $project: {
-        _id: 1,
-        createdAt: 1,
-        orderStatus: 1,
-        paymentStatus: 1,
-        paymentMethod: 1,
-        razorpayOrderId: 1,
-
-        // Shipping
-        shippingDetails: 1,
-
-        // Customer Info
-        user: {
-          _id: "$customerDetails._id",
-          name: "$customerDetails.fullName",
-          email: "$customerDetails.email",
-          phone: "$customerDetails.phone",
-        },
-
-        // Reconstruct ordered products with quantity & price
-        products: {
-          $map: {
-            input: "$products",
-            as: "item",
-            in: {
-              quantity: "$$item.quantity",
-              price: "$$item.price",
-              product: {
-                $arrayElemAt: [
-                  {
-                    $filter: {
-                      input: "$productDetails",
-                      as: "pd",
-                      cond: { $eq: ["$$pd._id", "$$item.product"] },
-                    },
-                  },
-                  0,
-                ],
-              },
-            },
-          },
-        },
-
-        // Order Total
-        orderTotal: {
-          $sum: {
-            $map: {
-              input: "$products",
-              as: "item",
-              in: { $multiply: ["$$item.quantity", "$$item.price"] },
-            },
-          },
-        },
-      },
-    },
-  ]);
-
-  if (!orderDetails || orderDetails.length === 0) {
-    throw new ApiError(404, "Order not found");
+    return res.status(201).json(
+      new ApiResponse(
+        201,
+        { ...order.toObject(), orderTotal },
+        "Order placed successfully"
+      )
+    );
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
   }
+});
+
+/* =========================
+   ORDER HISTORY (USER)
+========================= */
+const getOrderHistory = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  const orders = await Order.find({ customer: userId })
+    .sort({ createdAt: -1 })
+    .select("createdAt orderStatus paymentStatus products");
+
+  const formattedOrders = orders.map((order) => {
+    const totalAmount = order.products.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+
+    return {
+      _id: order._id,
+      createdAt: order.createdAt,
+      orderStatus: order.orderStatus,
+      paymentStatus: order.paymentStatus,
+      totalAmount,
+    };
+  });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, orderDetails, "Order details retrieved successfully"));
+    .json(new ApiResponse(200, formattedOrders, "Order history fetched"));
 });
 
-const cancelOrder = asyncHandler(async (req, res) => {
-  const { orderId } = req.params
+
+/* =========================
+   ORDER DETAILS
+========================= */
+const getOrderDetails = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+
   const order = await Order.findById(orderId)
+    .populate("products.product", "name price image")
+    .populate("customer", "fullName email phoneNo");
 
-  if (!order) throw new ApiError(404, "Order not found")
+  if (!order) throw new ApiError(404, "Order not found");
 
-  order.status = "Cancelled"
-  await order.save()
+  // calculate total
+  const totalAmount = order.products.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
 
-  io.emit("orderCancelled", {
+  const formattedOrder = {
+    ...order.toObject(),
+    totalAmount,
+  };
+
+  return res.status(200).json(
+    new ApiResponse(200, formattedOrder, "Order details fetched")
+  );
+});
+
+
+/* =========================
+   CANCEL ORDER
+========================= */
+const cancelOrder = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+
+  const order = await Order.findById(orderId);
+  if (!order) throw new ApiError(404, "Order not found");
+
+  if (order.orderStatus !== "Pending") {
+    throw new ApiError(400, "Order cannot be cancelled");
+  }
+
+  order.orderStatus = "Cancelled";
+  await order.save();
+
+  getIO().to("admin-room").emit("orderCancelled", {
     orderId: order._id,
-    status: order.status,
-    message: `Order ${order._id} has been cancelled`,
-  })
+    status: order.orderStatus,
+  });
 
-  return res.status(200).json(new ApiResponse(200, null, "Order cancelled successfully"))
-})
+  return res.status(200).json(
+    new ApiResponse(200, order, "Order cancelled successfully")
+  );
+});
 
 export {
   createRazorpayOrder,
@@ -264,4 +257,4 @@ export {
   getOrderHistory,
   getOrderDetails,
   cancelOrder,
-}
+};
